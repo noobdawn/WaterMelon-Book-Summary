@@ -46,7 +46,7 @@ namespace ConsoleApplication1
          * 若k=19时，无泛化的假设全部选满，加上空集，则当k=19时，最多有1种假设
          * 由于只有18种假设，所以可以令一个int32的末尾18位作为标记位，当某位为0时，则代表涵盖了该位所代表的无泛化假设，若为1，则恰好相反。
          */
-        private static int[,] hypothesis = new int[48,3]{
+        private static int[,] hypothesis = new int[48, 3]{
                 {0,0,0},
                 //代表{*，*，*}，范围0
                 {0,0,1},
@@ -85,14 +85,14 @@ namespace ConsoleApplication1
             for (int i = 30; i < 48; i++)
             {
                 sb.Clear();
-                for(int j = 0; j < 32; j++)
+                for (int j = 0; j < 32; j++)
                 {
                     if (j == i - 30 + 14)
                         sb.Append('0');
                     else
                         sb.Append('1');
                 }
-                hypoInt[i] = Convert.ToInt32(sb.ToString(),2);
+                hypoInt[i] = Convert.ToInt32(sb.ToString(), 2);
             }
             //将泛化假设的数组跟无泛化假设的数组比对，生成新的数组
             for (int i = 0; i < 30; i++)
@@ -116,14 +116,93 @@ namespace ConsoleApplication1
             }
         }
 
+        /// <summary>
+        /// 给定一个k值，计算出非空假设的最大可能数
+        /// </summary>
+        /// <param name="k"></param>
+        /// <returns></returns>
         static int GetNoNullResultByK(int k)
         {
+            Stack<KeyValuePair<int, int>> stack = new Stack<KeyValuePair<int, int>>();
+            int targetLength = k;
+            //目前拼凑出来的析取范式
+            int curHypo;
+            //从前往后使用的偏移值
+            int offset;
+            //累计的假设数量
+            int count = 0;
+            //从前往后，依次使用
+            for (int i = 0; i < 48; i++)
+            {
+                //初始化堆栈
+                stack.Clear();
+                stack.Push(new KeyValuePair<int, int>(hypoInt[i], i));
+                curHypo = Convert.ToInt32("11111111111111111111111111111111", 2) & hypoInt[i];
+                offset = i + 1;
+                //开始循环
+                while (true)
+                {
+                    //如果stack已经被弹空了，说明所有的都已经遍历了一次
+                    if (stack.Count == 0)
+                    {
+                        break;
+                    }
+                    //如果达到目标高度，则弹出最上面的键值对继续尝试
+                    if (stack.Count == targetLength)
+                    {
+                        offset = stack.Pop().Value + 1;
+                        count++;
+                        continue;
+                    }
+                    //如果偏移值到头了，则弹出两对继续尝试
+                    if (offset >= 48)
+                    {
+                        if (stack.Count == 1)
+                            break;
+                        stack.Pop();
+                        offset = stack.Pop().Value + 1;
+                        continue;
+                    }
+                    //要是之前都没有终端，则判断可否往里加塞
+                    //判断标准：
+                    //假设现有数为001010，则可以加塞的数为000000、000010、001000
+                    //即，第二个数至少要把一个1变为0，且不允许把0变成1
+                    bool canAdd = true;
+                    for (int j = 0; j < 18; j++)
+                    {
+                        //如果现在析取范式某位为0（已被泛化），且尝试加塞一个特例
+                        if (isZero(j, curHypo) && !isZero(j, hypoInt[offset]))
+                        {
+                            canAdd = false;
+                            continue;
+                        }
+                    }
+                    if (canAdd)
+                    {
+                        stack.Push(new KeyValuePair<int, int>(hypoInt[offset], offset));
+                        curHypo = Convert.ToInt32("11111111111111111111111111111111", 2);
+                        foreach (KeyValuePair<int, int> kv in stack)
+                        {
+                            curHypo = curHypo & kv.Key;
+                        }
+                    }
+                    offset++;
+                }
+            }
+            Print(k, count);
+            return count;
+        }
 
+        static bool isZero(int offset, int bit)
+        {
+            int a = bit;
+            a = offset >> bit;
+            return ((a & 1) == 0);
         }
 
         static void Print(int k, int count)
         {
-            Console.WriteLine(string.Format("有%d个合取式的析合范式最多有%d个假设", k, count));
+            Console.WriteLine(string.Format("有{0}个合取式的析合范式最多有{1}个假设", k, count));
         }
 
         static void Main(string[] args)
@@ -131,23 +210,25 @@ namespace ConsoleApplication1
             //准备好整数化后的示例数组
             hypo2int();
             //计算1~48项的非空假设组合
-            noNullResult = new int[48];
-            for (int i = 1; i <= 48; i ++ )
+            noNullResult = new int[18];
+            for (int i = 1; i <= 18; i++)
             {
-                noNullResult[i] = GetNoNullResultByK(i);
+                noNullResult[i - 1] = GetNoNullResultByK(i);
             }
             //加上空集后输出
-            for (int k = 1; k <= 49; k++)
+            for (int k = 1; k <= 19; k++)
             {
                 if (k == 1)
                     Print(k, 49);
-                else if (k == 49)
+                else if (k == 19)
                     Print(k, 1);
                 else
                 {
-                    
+                    //每个k值有加上空集和无空集两种情况，以及一个纯空集
+                    Print(k, noNullResult[k - 1] * 2 + 1);
                 }
             }
+            Console.Read();
         }
     }
 }
